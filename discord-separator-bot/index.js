@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, AttachmentBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, AttachmentBuilder, ActivityType } = require('discord.js');
 
 const token = process.env.DISCORD_TOKEN;
 const reviewChannelId = process.env.REVIEW_CHANNEL_ID || '1447978433178239211';
@@ -22,6 +22,10 @@ const client = new Client({
 
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
+  client.user.setPresence({
+    activities: [{ name: 'Vola Store • Reviews', type: ActivityType.Streaming }],
+    status: 'online'
+  });
 });
 
 client.on('messageCreate', async message => {
