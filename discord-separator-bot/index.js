@@ -1,7 +1,8 @@
 const { Client, GatewayIntentBits, AttachmentBuilder } = require('discord.js');
 
 const token = process.env.DISCORD_TOKEN;
-const channelId = process.env.CHANNEL_ID || '1551213877717639181';
+const reviewChannelId = process.env.REVIEW_CHANNEL_ID || '1447978433178239211';
+const proofsChannelId = process.env.PROOFS_CHANNEL_ID || '1551213877717639181';
 const reactionId = process.env.REACTION_ID || '1550607999805030490';
 const separatorFile = process.env.SEPARATOR_FILE || './separator.webp';
 
@@ -23,13 +24,19 @@ client.once('ready', () => {
 });
 
 client.on('messageCreate', async message => {
-  if (message.author.bot || message.channel.id !== channelId) return;
+  if (message.author.bot) return;
+
+  const isReview = message.channel.id === reviewChannelId;
+  const isProofs = message.channel.id === proofsChannelId;
+  if (!isReview && !isProofs) return;
 
   try {
     await message.react(reactionId);
   } catch (error) {
     console.error('Could not add reaction:', error.message);
   }
+
+  if (!isReview) return;
 
   try {
     await message.channel.send({
