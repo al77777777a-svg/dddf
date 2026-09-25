@@ -1,8 +1,9 @@
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, AttachmentBuilder } = require('discord.js');
 
 const token = process.env.DISCORD_TOKEN;
 const channelId = process.env.CHANNEL_ID || '1551213877717639181';
 const reactionId = process.env.REACTION_ID || '1550607999805030490';
+const separatorFile = process.env.SEPARATOR_FILE || './separator.webp';
 
 if (!token) {
   console.error('Missing DISCORD_TOKEN environment variable.');
@@ -28,6 +29,14 @@ client.on('messageCreate', async message => {
     await message.react(reactionId);
   } catch (error) {
     console.error('Could not add reaction:', error.message);
+  }
+
+  try {
+    await message.channel.send({
+      files: [new AttachmentBuilder(separatorFile, { name: 'separator.webp' })]
+    });
+  } catch (error) {
+    console.error('Could not send separator:', error.message);
   }
 });
 
