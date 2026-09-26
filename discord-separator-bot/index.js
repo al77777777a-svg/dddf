@@ -45,12 +45,17 @@ function defaults() {
     separatorFile: null,
     statusMode: process.env.STATUS_MODE || 'auto',
     statusText: process.env.STATUS_TEXT || brand.name + ' • /help',
-    statusUrl: process.env.STATUS_URL || null
+    statusUrl: process.env.STATUS_URL || null,
+    subscriptionExpiresAt: null
   };
 }
 function load() { try { return Object.assign(defaults(), JSON.parse(fs.readFileSync(dataFile, 'utf8'))); } catch { return defaults(); } }
 function save() { const tmp = dataFile + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(settings, null, 2), { mode: 0o600 }); fs.renameSync(tmp, dataFile); }
 save();
+if (!settings.subscriptionExpiresAt) { const configured = Date.parse(process.env.SUBSCRIPTION_EXPIRES_AT || ''); settings.subscriptionExpiresAt = Number.isFinite(configured) ? configured : Date.now() + Math.max(1, Number(process.env.SUBSCRIPTION_DAYS || 30)) * 86400000; save(); }
+function subscriptionActive() { return Number(settings.subscriptionExpiresAt) > Date.now(); }
+function subscriptionDaysLeft() { return Math.max(0, Math.ceil((Number(settings.subscriptionExpiresAt) - Date.now()) / 86400000)); }
+function subscriptionText() { const when = new Date(Number(settings.subscriptionExpiresAt)).toLocaleString('en-GB', { timeZone: 'Asia/Dubai' }); return subscriptionActive() ? '🟢 الاشتراك فعال' + String.fromCharCode(10) + 'المتبقي: ' + subscriptionDaysLeft() + ' يوم' + String.fromCharCode(10) + 'ينتهي: ' + when : '🔴 الاشتراك منتهي' + String.fromCharCode(10) + 'انتهى: ' + when + String.fromCharCode(10) + 'استخدم /renew بعد الدفع.'; }
 function log(area, error) { count.errors++; lastError = area + ': ' + (error.code || error.message || 'error'); console.error('[' + area + '] ' + lastError); }
 function imageType(buffer) {
   if (!buffer || buffer.length > maxImage) throw new Error('الصورة لازم تكون أقل من 8MB.');
@@ -93,6 +98,8 @@ function cmd(name, description, isAdmin) { const c = new SlashCommandBuilder().s
 const commands = [
   cmd('help', 'دليل البوت وروابط المتجر'),
   cmd('setup', 'إعداد تلقائي للرومات والفواصل', true),
+  cmd('subscription', 'عرض حالة الاشتراك'),
+  cmd('renew', 'تجديد الاشتراك لعدد من الأيام', true).addIntegerOption(o => o.setName('days').setDescription('عدد الأيام').setRequired(true).setMinValue(1).setMaxValue(3650)),
   cmd('panel', 'لوحة إعدادات الإدارة', true),
   cmd('stats', 'حالة البوت والإحصائيات', true),
   cmd('diagnose', 'فحص الرومات والصلاحيات', true),
@@ -109,6 +116,7 @@ const commands = [
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 function status() {
+  if (!subscriptionActive()) { client.user.setPresence({ status: 'invisible', activities: [] }); return; }
   const modes = { playing: ActivityType.Playing, watching: ActivityType.Watching, listening: ActivityType.Listening, streaming: ActivityType.Streaming };
   if (settings.statusMode === 'auto') { client.user.setPresence({ status: 'online', activities: [{ name: brand.name + ' • /help', type: ActivityType.Watching }] }); return; }
   const type = modes[settings.statusMode] || ActivityType.Watching;
@@ -139,12 +147,16 @@ async function autoSetup(guild) {
 async function reply(i, body) { return i.deferred || i.replied ? i.editReply(body) : i.reply(body); }
 async function interaction(i) {
   if (!i.isChatInputCommand()) return;
-  if (i.commandName !== 'help' && !admin(i)) return i.reply({ content: 'هذا الأمر للإدارة فقط.', ephemeral: true });
+  if (i.commandName === 'renew' && !owner(i)) return i.reply({ content: 'تجديد الاشتراك لمالك البوت فقط.', ephemeral: true });
+  if (!['help', 'subscription', 'renew'].includes(i.commandName) && !admin(i)) return i.reply({ content: 'هذا الأمر للإدارة فقط.', ephemeral: true });
+  if (!subscriptionActive() && !['subscription', 'renew'].includes(i.commandName)) return i.reply({ content: 'انتهى اشتراك هذا البوت. جدّد الاشتراك أولًا.', ephemeral: true });
   if (i.commandName === 'profile' && !owner(i)) return i.reply({ content: 'تعديل هوية البوت لمالك التطبيق فقط.', ephemeral: true });
   await i.deferReply({ ephemeral: true });
   try {
     const o = i.options; const name = i.commandName;
     if (name === 'help') return reply(i, help());
+    if (name === 'subscription') return reply(i, { embeds: [embed('SUBSCRIPTION', subscriptionText())] });
+    if (name === 'renew') { const days = o.getInteger('days', true); const start = Math.max(Date.now(), Number(settings.subscriptionExpiresAt) || 0); settings.subscriptionExpiresAt = start + days * 86400000; save(); status(); return reply(i, { embeds: [embed('RENEWED', 'تم تجديد الاشتراك ✅' + String.fromCharCode(10) + subscriptionText())] }); }
     if (name === 'setup') { const result = await autoSetup(i.guild); const nl = String.fromCharCode(10); return reply(i, { embeds: [embed('AUTO SETUP', 'تم تجهيز البوت تلقائيًا ✅' + nl + 'Review: <#' + result.reviewChannel.id + '>' + nl + 'Proofs: <#' + result.proofsChannel.id + '>' + nl + 'الفاصل والراكشنات يعملان الآن.')] }); }
     if (name === 'panel') return reply(i, panel());
     if (name === 'stats') return reply(i, stats());
@@ -160,7 +172,7 @@ async function interaction(i) {
   } catch (error) { log(i.commandName, error); return reply(i, { embeds: [embed('NOTICE', error.code === 50013 ? 'البوت ناقص صلاحيات. استخدم /diagnose.' : error.message || 'تعذر تنفيذ الأمر.')] }); }
 }
 client.on('interactionCreate', i => interaction(i).catch(e => log('interaction', e)));
-client.on('messageCreate', async message => { if (message.author.bot || message.guildId !== id.guild || seen.has(message.id)) return; const target = message.channelId === channel('review') && settings.reviewEnabled ? 'review' : message.channelId === channel('proofs') && settings.proofsEnabled ? 'proofs' : null; if (!target) return; seen.add(message.id); const previous = queue.get(message.channelId) || Promise.resolve(); const current = previous.then(async () => { count.messages++; try { await message.react(target === 'review' ? settings.reviewEmoji : settings.proofsEmoji); count.reactions++; } catch (e) { log('reaction', e); } if (target !== 'review' || !settings.separatorEnabled) return; separatorCounter++; if (separatorCounter < settings.interval) return; separatorCounter = 0; try { await message.channel.send({ files: [separator()] }); count.separators++; } catch (e) { log('separator', e); } }).finally(() => { if (queue.get(message.channelId) === current) queue.delete(message.channelId); }); queue.set(message.channelId, current); });
+client.on('messageCreate', async message => { if (!subscriptionActive() || message.author.bot || message.guildId !== id.guild || seen.has(message.id)) return; const target = message.channelId === channel('review') && settings.reviewEnabled ? 'review' : message.channelId === channel('proofs') && settings.proofsEnabled ? 'proofs' : null; if (!target) return; seen.add(message.id); const previous = queue.get(message.channelId) || Promise.resolve(); const current = previous.then(async () => { count.messages++; try { await message.react(target === 'review' ? settings.reviewEmoji : settings.proofsEmoji); count.reactions++; } catch (e) { log('reaction', e); } if (target !== 'review' || !settings.separatorEnabled) return; separatorCounter++; if (separatorCounter < settings.interval) return; separatorCounter = 0; try { await message.channel.send({ files: [separator()] }); count.separators++; } catch (e) { log('separator', e); } }).finally(() => { if (queue.get(message.channelId) === current) queue.delete(message.channelId); }); queue.set(message.channelId, current); });
 client.once('ready', async () => { console.log(brand.name + ' online; data=' + dataDir); status(); setInterval(status, 60000).unref(); try { await client.application.fetch(); const guild = await client.guilds.fetch(id.guild); await guild.commands.set(commands); console.log('Registered ' + commands.length + ' commands.'); } catch (e) { log('commands', e); } });
 client.on('error', e => log('client', e));
 client.login(token).catch(e => { log('login', e); process.exit(1); });
