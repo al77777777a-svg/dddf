@@ -92,6 +92,7 @@ function targetOption(o) { return o.setName('target').setDescription('الروم
 function cmd(name, description, isAdmin) { const c = new SlashCommandBuilder().setName(name).setDescription(description).setDMPermission(false); if (isAdmin) c.setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild); return c; }
 const commands = [
   cmd('help', 'دليل البوت وروابط المتجر'),
+  cmd('setup', 'إعداد تلقائي للرومات والفواصل', true),
   cmd('panel', 'لوحة إعدادات الإدارة', true),
   cmd('stats', 'حالة البوت والإحصائيات', true),
   cmd('diagnose', 'فحص الرومات والصلاحيات', true),
@@ -117,6 +118,24 @@ function help() { const nl = String.fromCharCode(10); return { embeds: [embed('C
 function panel() { const nl = String.fromCharCode(10); return { embeds: [embed('CONTROL PANEL', 'كل إعداد محفوظ لهذه النسخة فقط.').addFields({ name: 'Review', value: '<#' + channel('review') + '>' + nl + (settings.reviewEnabled ? '🟢' : '⏸') + ' ' + settings.reviewEmoji, inline: true }, { name: 'Proofs', value: '<#' + channel('proofs') + '>' + nl + (settings.proofsEnabled ? '🟢' : '⏸') + ' ' + settings.proofsEmoji, inline: true }, { name: 'الفاصل', value: (settings.separatorEnabled ? '🟢 يعمل' : '⏸ متوقف') + ' • كل ' + settings.interval + ' رسالة' }, { name: 'بيع البوت', value: 'نفس الملف لكل عميل، مع DISCORD_TOKEN وGUILD_ID وBRAND_NAME ورومات مختلفة لكل نسخة.' })] }; }
 function stats() { const nl = String.fromCharCode(10); return { embeds: [embed('BOT STATUS', 'الاتصال: ' + client.ws.ping + ' ms' + nl + 'وقت التشغيل: ' + Math.floor(process.uptime() / 60) + ' دقيقة' + nl + 'الذاكرة: ' + Math.round(process.memoryUsage().rss / 1024 / 1024) + ' MB' + nl + nl + 'الرسائل: ' + count.messages + nl + 'الريأكشنات: ' + count.reactions + nl + 'الفواصل: ' + count.separators + nl + 'الأخطاء: ' + count.errors + nl + 'آخر خطأ: ' + lastError)] }; }
 async function diagnose(guild) { const me = await guild.members.fetchMe(); const lines = []; for (const pair of [['Review', 'review'], ['Proofs', 'proofs']]) { const ch = await guild.channels.fetch(channel(pair[1])).catch(() => null); if (!ch) { lines.push('❌ ' + pair[0] + ': الروم غير موجود.'); continue; } const p = ch.permissionsFor(me); const needed = ['ViewChannel', 'ReadMessageHistory', 'AddReactions']; if (pair[1] === 'review' && settings.separatorEnabled) needed.push('SendMessages', 'AttachFiles'); const missing = needed.filter(x => !p || !p.has(PermissionFlagsBits[x])); lines.push(missing.length ? '❌ ' + pair[0] + ': ناقص ' + missing.join(', ') : '✅ ' + pair[0] + ': الصلاحيات جاهزة.'); } lines.push(fs.existsSync(settings.separatorFile || fallbackImage) ? '✅ صورة الفاصل موجودة.' : '❌ استخدم /setimage.'); lines.push(process.env.RAILWAY_VOLUME_MOUNT_PATH || process.env.DATA_DIR ? '✅ التخزين الدائم مفعّل.' : '⚠️ أضف DATA_DIR=/data في Railway.'); return { embeds: [embed('DIAGNOSE', lines.join(String.fromCharCode(10)))] }; }
+async function autoSetup(guild) {
+  const me = await guild.members.fetchMe();
+  if (!me.permissions.has(PermissionFlagsBits.ManageChannels)) throw new Error('أعطِ البوت صلاحية Manage Channels ثم أعد /setup.');
+  const findExisting = async (idValue, names) => {
+    const current = idValue ? await guild.channels.fetch(idValue).catch(() => null) : null;
+    if (current && current.type === ChannelType.GuildText) return current;
+    return guild.channels.cache.find(c => c.type === ChannelType.GuildText && names.includes(c.name.toLowerCase())) || null;
+  };
+  const review = await findExisting(settings.reviewChannel, ['review', 'reviews', 'تقييم', 'التقييمات']);
+  const proofs = await findExisting(settings.proofsChannel, ['proofs', 'proof', 'إثبات', 'الإثباتات']);
+  const make = name => guild.channels.create({ name, type: ChannelType.GuildText, reason: 'Vola Store automatic setup' });
+  const reviewChannel = review || await make('review');
+  const proofsChannel = proofs || await make('proofs');
+  settings.reviewChannel = reviewChannel.id;
+  settings.proofsChannel = proofsChannel.id;
+  save();
+  return { reviewChannel, proofsChannel };
+}
 async function reply(i, body) { return i.deferred || i.replied ? i.editReply(body) : i.reply(body); }
 async function interaction(i) {
   if (!i.isChatInputCommand()) return;
@@ -126,6 +145,7 @@ async function interaction(i) {
   try {
     const o = i.options; const name = i.commandName;
     if (name === 'help') return reply(i, help());
+    if (name === 'setup') { const result = await autoSetup(i.guild); const nl = String.fromCharCode(10); return reply(i, { embeds: [embed('AUTO SETUP', 'تم تجهيز البوت تلقائيًا ✅' + nl + 'Review: <#' + result.reviewChannel.id + '>' + nl + 'Proofs: <#' + result.proofsChannel.id + '>' + nl + 'الفاصل والراكشنات يعملان الآن.')] }); }
     if (name === 'panel') return reply(i, panel());
     if (name === 'stats') return reply(i, stats());
     if (name === 'diagnose') return reply(i, await diagnose(i.guild));
