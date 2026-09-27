@@ -48,8 +48,12 @@ function defaults() {
     statusUrl: process.env.STATUS_URL || null,
     subscriptionExpiresAt: null
   };
+}function load() {
+  let current;
+  try { current = Object.assign(defaults(), JSON.parse(fs.readFileSync(dataFile, 'utf8'))); } catch { current = defaults(); }
+  if (!current.orynImageMigration) { current.separatorFile = null; current.orynImageMigration = true; }
+  return current;
 }
-function load() { try { return Object.assign(defaults(), JSON.parse(fs.readFileSync(dataFile, 'utf8'))); } catch { return defaults(); } }
 function save() { const tmp = dataFile + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(settings, null, 2), { mode: 0o600 }); fs.renameSync(tmp, dataFile); }
 save();
 if (!settings.subscriptionExpiresAt) { const configured = Date.parse(process.env.SUBSCRIPTION_EXPIRES_AT || ''); settings.subscriptionExpiresAt = Number.isFinite(configured) ? configured : Date.now() + Math.max(1, Number(process.env.SUBSCRIPTION_DAYS || 30)) * 86400000; save(); }
