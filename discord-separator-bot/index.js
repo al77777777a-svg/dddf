@@ -22,7 +22,7 @@ const brand = {
 const dataDir = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, '.data');
 fs.mkdirSync(dataDir, { recursive: true });
 const dataFile = path.join(dataDir, 'settings.json');
-const fallbackImage = path.resolve(__dirname, process.env.SEPARATOR_FILE || 'separator.webp');
+const configuredSeparator = process.env.SEPARATOR_FILE || 'separator.webp'; const separatorCandidates = [path.resolve(__dirname, configuredSeparator), path.resolve(__dirname, '..', configuredSeparator), path.resolve(__dirname, path.basename(configuredSeparator))]; const fallbackImage = separatorCandidates.find(fs.existsSync) || separatorCandidates[0];
 const maxImage = 8 * 1024 * 1024;
 let settings = load();
 let count = { messages: 0, reactions: 0, separators: 0, errors: 0 };
@@ -77,7 +77,7 @@ async function readImage(attachment) {
   const buffer = Buffer.concat(chunks); imageType(buffer); return buffer;
 }
 function separator() {
-  const file = settings.separatorFile && fs.existsSync(settings.separatorFile) ? settings.separatorFile : fallbackImage;
+  const file = process.env.SEPARATOR_FILE ? fallbackImage : (settings.separatorFile && fs.existsSync(settings.separatorFile) ? settings.separatorFile : fallbackImage);
   if (!fs.existsSync(file)) throw new Error('ارفع صورة الفاصل أولًا باستخدام /setimage.');
   return new AttachmentBuilder(file, { name: 'vola-separator' + path.extname(file) });
 }
