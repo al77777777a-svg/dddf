@@ -22,7 +22,7 @@ const brand = {
 const dataDir = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, '.data');
 fs.mkdirSync(dataDir, { recursive: true });
 const dataFile = path.join(dataDir, 'settings.json');
-const fallbackImage = path.resolve(__dirname, process.env.SEPARATOR_FILE || 'discord-separator-bot/separator-oryn-final.webp');
+const fallbackImage = path.resolve(__dirname, process.env.SEPARATOR_FILE || 'separator.webp');
 const maxImage = 8 * 1024 * 1024;
 let settings = load();
 let count = { messages: 0, reactions: 0, separators: 0, errors: 0 };
@@ -48,12 +48,8 @@ function defaults() {
     statusUrl: process.env.STATUS_URL || null,
     subscriptionExpiresAt: null
   };
-}function load() {
-  let current;
-  try { current = Object.assign(defaults(), JSON.parse(fs.readFileSync(dataFile, 'utf8'))); } catch { current = defaults(); }
-  if (!current.orynImageMigration) { current.separatorFile = null; current.orynImageMigration = true; }
-  return current;
 }
+function load() { try { return Object.assign(defaults(), JSON.parse(fs.readFileSync(dataFile, 'utf8'))); } catch { return defaults(); } }
 function save() { const tmp = dataFile + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(settings, null, 2), { mode: 0o600 }); fs.renameSync(tmp, dataFile); }
 save();
 if (!settings.subscriptionExpiresAt) { const configured = Date.parse(process.env.SUBSCRIPTION_EXPIRES_AT || ''); settings.subscriptionExpiresAt = Number.isFinite(configured) ? configured : Date.now() + Math.max(1, Number(process.env.SUBSCRIPTION_DAYS || 30)) * 86400000; save(); }
