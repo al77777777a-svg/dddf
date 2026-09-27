@@ -22,7 +22,7 @@ const brand = {
 const dataDir = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, '.data');
 fs.mkdirSync(dataDir, { recursive: true });
 const dataFile = path.join(dataDir, 'settings.json');
-const fallbackImage = path.resolve(__dirname, process.env.SEPARATOR_FILE || 'separator.webp');
+const fallbackImage = path.resolve(__dirname, process.env.SEPARATOR_FILE || 'discord-separator-bot/separator-oryn-final.webp');
 const maxImage = 8 * 1024 * 1024;
 let settings = load();
 let count = { messages: 0, reactions: 0, separators: 0, errors: 0 };
