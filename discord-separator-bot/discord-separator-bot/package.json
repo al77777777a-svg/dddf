@@ -1,0 +1,17 @@
+{
+  "name": "discord-separator-bot",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Vola Store multi-tenant Discord bot with reactions, separators and branding controls.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "check": "node --check index.js"
+  },
+  "dependencies": {
+    "discord.js": "14.27.0"
+  },
+  "engines": {
+    "node": ">=22.12.0 <25"
+  }
+}
