@@ -44,7 +44,7 @@ function defaults() {
     separatorEnabled: true,
     separatorFile: null,
     statusMode: process.env.STATUS_MODE || 'auto',
-    statusText: process.env.STATUS_TEXT || brand.name + ' • /help',
+    statusText: process.env.STATUS_TEXT || brand.name,
     statusUrl: process.env.STATUS_URL || null,
     subscriptionExpiresAt: null
   };
@@ -118,7 +118,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 function status() {
   if (!subscriptionActive()) { client.user.setPresence({ status: 'invisible', activities: [] }); return; }
   const modes = { playing: ActivityType.Playing, watching: ActivityType.Watching, listening: ActivityType.Listening, streaming: ActivityType.Streaming };
-  if (settings.statusMode === 'auto') { client.user.setPresence({ status: 'online', activities: [{ name: brand.name + ' • /help', type: ActivityType.Watching }] }); return; }
+  if (settings.statusMode === 'auto') { client.user.setPresence({ status: 'online', activities: [{ name: brand.name, type: ActivityType.Watching }] }); return; }
   const type = modes[settings.statusMode] || ActivityType.Watching;
   client.user.setPresence({ status: 'online', activities: [{ name: settings.statusText, type: type, ...(type === ActivityType.Streaming ? { url: settings.statusUrl } : {}) }] });
 }
@@ -167,12 +167,12 @@ async function interaction(i) {
     if (name === 'setchannel') { const target = o.getString('target', true); settings[target + 'Channel'] = o.getChannel('channel', true).id; save(); return reply(i, { embeds: [embed('SAVED', 'تم تغيير روم ' + target + ' ✅')] }); }
     if (name === 'interval') { settings.interval = o.getInteger('messages', true); save(); separatorCounter = 0; return reply(i, { embeds: [embed('SAVED', 'الفاصل الآن بعد كل ' + settings.interval + ' رسالة ✅')] }); }
     if (name === 'toggle') { const f = o.getString('feature', true); const on = o.getBoolean('enabled', true); settings[f === 'separator' ? 'separatorEnabled' : f + 'Enabled'] = on; save(); return reply(i, panel()); }
-    if (name === 'status') { const mode = o.getString('mode', true); const url = o.getString('url'); if (mode === 'streaming' && (!url || !/^https:\/\/(www\.)?(twitch\.tv|youtube\.com)\/.+/.test(url))) throw new Error('Streaming يحتاج رابط Twitch أو YouTube.'); settings.statusMode = mode; settings.statusText = o.getString('text') || brand.name + ' • /help'; settings.statusUrl = mode === 'streaming' ? url : null; save(); status(); return reply(i, { embeds: [embed('SAVED', 'تم تحديث حالة البوت ✅')] }); }
+    if (name === 'status') { const mode = o.getString('mode', true); const url = o.getString('url'); if (mode === 'streaming' && (!url || !/^https:\/\/(www\.)?(twitch\.tv|youtube\.com)\/.+/.test(url))) throw new Error('Streaming يحتاج رابط Twitch أو YouTube.'); settings.statusMode = mode; settings.statusText = o.getString('text') || brand.name; settings.statusUrl = mode === 'streaming' ? url : null; save(); status(); return reply(i, { embeds: [embed('SAVED', 'تم تحديث حالة البوت ✅')] }); }
     if (name === 'profile') { const bio = o.getString('bio'); const avatar = o.getAttachment('avatar'); const banner = o.getAttachment('banner'); if (!bio && !avatar && !banner) throw new Error('أرسل bio أو avatar أو banner.'); const edit = {}; if (bio) edit.description = bio; if (avatar) edit.icon = await readImage(avatar); if (banner) edit.coverImage = await readImage(banner); await client.application.edit(edit); if (avatar) await client.user.setAvatar(edit.icon); return reply(i, { embeds: [embed('PROFILE SAVED', 'تم تحديث البايو والصورة والبنر ✅')] }); }
   } catch (error) { log(i.commandName, error); return reply(i, { embeds: [embed('NOTICE', error.code === 50013 ? 'البوت ناقص صلاحيات. استخدم /diagnose.' : error.message || 'تعذر تنفيذ الأمر.')] }); }
 }
 client.on('interactionCreate', i => interaction(i).catch(e => log('interaction', e)));
 client.on('messageCreate', async message => { if (!subscriptionActive() || message.author.bot || message.guildId !== id.guild || seen.has(message.id)) return; const target = message.channelId === channel('review') && settings.reviewEnabled ? 'review' : message.channelId === channel('proofs') && settings.proofsEnabled ? 'proofs' : null; if (!target) return; seen.add(message.id); const previous = queue.get(message.channelId) || Promise.resolve(); const current = previous.then(async () => { count.messages++; try { await message.react(target === 'review' ? settings.reviewEmoji : settings.proofsEmoji); count.reactions++; } catch (e) { log('reaction', e); } if (target !== 'review' || !settings.separatorEnabled) return; separatorCounter++; if (separatorCounter < settings.interval) return; separatorCounter = 0; try { await message.channel.send({ files: [separator()] }); count.separators++; } catch (e) { log('separator', e); } }).finally(() => { if (queue.get(message.channelId) === current) queue.delete(message.channelId); }); queue.set(message.channelId, current); });
-client.once('ready', async () => { console.log(brand.name + ' online; data=' + dataDir); status(); setInterval(status, 60000).unref(); try { await client.application.fetch(); const guild = await client.guilds.fetch(id.guild); await guild.commands.set(commands); console.log('Registered ' + commands.length + ' commands.'); } catch (e) { log('commands', e); } });
+client.once('ready', async () => { console.log(brand.name + ' online; data=' + dataDir); status(); setInterval(status, 60000).unref(); try { await client.application.fetch(); const guild = await client.guilds.fetch(id.guild); await guild.commands.set([]); console.log('Slash commands disabled and cleared in ' + guild.id + '.'); } catch (e) { log('commands', e); } });
 client.on('error', e => log('client', e));
 client.login(token).catch(e => { log('login', e); process.exit(1); });
